@@ -2,115 +2,96 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мой Облачный Сейф</title>
+    <title>Мой Сейф</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/dark.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
-    <div id="loginBlock" style="text-align: center; margin-top: 100px;">
-        <div style="border: 1px solid #444; padding: 20px; border-radius: 12px; background: #1e272e;">
-            <h2>🔓 Вход в облако</h2>
-            <input type="password" id="passInput" placeholder="Введите пароль...">
-            <button onclick="checkPassword()">Войти</button>
-        </div>
+    <div id="auth" style="text-align:center; margin-top:50px;">
+        <h2>🔐 Вход</h2>
+        <input type="password" id="p" placeholder="Пароль...">
+        <button onclick="login()">ВОЙТИ</button>
     </div>
 
-    <div id="mainContent" style="display: none;">
-        <h1>🔒 Мое Хранилище</h1>
-        <button onclick="location.reload()" style="width: auto; float: right;">Выйти</button>
-        
-        <div style="border: 1px solid #444; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-            <h3>➕ Новая запись</h3>
-            <select id="dataType">
+    <div id="app" style="display:none">
+        <h1>🔒 Личное Облако</h1>
+        <div style="border:1px solid #555; padding:15px; border-radius:10px; background:#1e272e">
+            <input id="t" placeholder="Заголовок">
+            <textarea id="c" placeholder="Текст или ссылка"></textarea>
+            <select id="y">
                 <option value="note">📝 Заметка</option>
-                <option value="link">🔗 Ссылка/Файл</option>
+                <option value="link">🔗 Ссылка</option>
             </select>
-            <input type="text" id="dataTitle" placeholder="Заголовок">
-            <textarea id="dataContent" placeholder="Текст или ссылка"></textarea>
-            <button id="saveBtn" onclick="saveData()">Сохранить в облако</button>
+            <button onclick="add()" id="btn" style="background:green; width:100%">СОХРАНИТЬ</button>
         </div>
-
-        <div id="displayArea">Загрузка данных...</div>
+        <div id="status" style="margin:10px 0; color:#3498db; text-align:center"></div>
+        <div id="list"></div>
     </div>
 
     <script>
-        // Твои настройки (уже вставлены)
-        const SB_URL = "https://pokndnygducdizmuajek.supabase.co";
-        const SB_KEY = "sb_publishable_38t8s0j-MLQnwgQDfH471w_M7hDZCdt";
-        const SECRET_PASSWORD = "201595sA!@"; // Если менял пароль, исправь здесь
+        const URL = "https://pokndnygducdizmuajek.supabase.co";
+        const KEY = "sb_publishable_38t8s0j-MLQnwgQDfH471w_M7hDZCdt";
+        const PASS = "1234"; 
 
-        // Инициализация клиента
-        const supabase = Object.assign(window.supabase.createClient(SB_URL, SB_KEY));
+        const sb = supabase.createClient(URL, KEY);
 
-        function checkPassword() {
-            const entered = document.getElementById('passInput').value;
-            console.log("Попытка входа..."); // Для проверки в консоли
-            
-            if (entered === SECRET_PASSWORD) {
-                document.getElementById('loginBlock').style.display = 'none';
-                document.getElementById('mainContent').style.display = 'block';
-                loadData();
-            } else {
-                alert("Пароль неверный!");
-            }
+        function login() {
+            if (document.getElementById('p').value === PASS) {
+                document.getElementById('auth').style.display='none';
+                document.getElementById('app').style.display='block';
+                show();
+            } else { alert("Неверно!"); }
         }
 
-        async function saveData() {
-            const type = document.getElementById('dataType').value;
-            const title = document.getElementById('dataTitle').value;
-            const content = document.getElementById('dataContent').value;
+        async function add() {
+            const title = document.getElementById('t').value;
+            const content = document.getElementById('c').value;
+            const type = document.getElementById('y').value;
+            const btn = document.getElementById('btn');
 
-            if(!title || !content) return alert("Заполни все поля");
+            if(!title || !content) return alert("Заполни все поля!");
 
-            const { error } = await supabase
-                .from('my_vault')
-                .insert([{ type, title, content }]);
+            btn.disabled = true;
+            document.getElementById('status').innerText = "⏳ Сохранение...";
 
-            if (error) {
-                alert("Ошибка базы данных: " + error.message);
-                console.error(error);
+            // Отправляем данные в таблицу
+            const { error } = await sb.from('my_vault').insert([{ title, content, type }]);
+
+            if(error) {
+                alert("ОШИБКА: " + error.message);
+                document.getElementById('status').innerText = "❌ Ошибка";
             } else {
-                document.getElementById('dataTitle').value = "";
-                document.getElementById('dataContent').value = "";
-                loadData();
+                document.getElementById('t').value = '';
+                document.getElementById('c').value = '';
+                document.getElementById('status').innerText = "✅ Успешно сохранено!";
+                show();
             }
+            btn.disabled = false;
         }
 
-        async function loadData() {
-            const area = document.getElementById('displayArea');
-            let { data: notes, error } = await supabase
-                .from('my_vault')
-                .select('*')
-                .order('id', { ascending: false });
-
+        async function show() {
+            const { data, error } = await sb.from('my_vault').select('*').order('id', {ascending: false});
+            const out = document.getElementById('list');
             if (error) {
-                area.innerHTML = "<p style='color:red'>Ошибка загрузки: " + error.message + ". Проверьте, создана ли таблица в SQL Editor!</p>";
+                out.innerHTML = "Ошибка загрузки: " + error.message;
                 return;
             }
-
-            area.innerHTML = "";
-            if (notes.length === 0) area.innerHTML = "Пока ничего не сохранено.";
-
-            notes.forEach(item => {
-                const body = (item.type === 'note') 
-                    ? `<p>${item.content}</p>` 
-                    : `<p><a href="${item.content}" target="_blank">Открыть ссылку ↗</a></p>`;
-                
-                area.innerHTML += `
-                    <div style="border: 1px solid #444; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
-                        <button onclick="deleteItem(${item.id})" style="float:right; width:auto; background:red;">🗑</button>
-                        <strong>${item.title}</strong>
-                        ${body}
-                    </div>`;
+            out.innerHTML = "";
+            data.forEach(i => {
+                out.innerHTML += `
+                <div style="border:1px solid #444; padding:15px; margin-top:10px; border-radius:8px; background:#2c3e50">
+                    <button onclick="del(${i.id})" style="float:right; background:red; padding:2px 8px;">🗑</button>
+                    <strong style="color:#3498db">${i.title}</strong><br>
+                    <div style="margin-top:10px">${i.type === 'note' ? i.content : '<a href="'+i.content+'" target="_blank">Открыть ссылку ↗</a>'}</div>
+                </div>`;
             });
         }
 
-        async function deleteItem(id) {
-            if(!confirm("Удалить?")) return;
-            await supabase.from('my_vault').delete().eq('id', id);
-            loadData();
+        async function del(id) {
+            if(confirm("Удалить?")) {
+                await sb.from('my_vault').delete().eq('id', id);
+                show();
+            }
         }
     </script>
 </body>
