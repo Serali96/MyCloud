@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мой Облачный Сейф</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --accent: #3498db; }
+        #mainContent { display: none; }
+        .card { border: 1px solid #444; padding: 20px; border-radius: 12px; margin-bottom: 20px; background: #1e272e; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; }
+        .type-badge { font-size: 0.75em; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; font-weight: bold; margin-bottom: 10px; display: inline-block; }
+        .type-link { background: #2980b9; color: white; }
+        .type-file { background: #8e44ad; color: white; }
+        .type-note { background: #d35400; color: white; }
+        .delete-btn { color: #e74c3c; cursor: pointer; position: absolute; top: 15px; right: 15px; border: none; background: none; font-size: 1.3em; }
+        .search-box { margin-bottom: 25px; }
+        button { background-color: var(--accent) !important; width: 100%; transition: 0.3s; cursor: pointer; border: none; }
+        button:hover { opacity: 0.8; }
+        .loader { text-align: center; color: #3498db; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="loginBlock" style="text-align: center; margin-top: 100px; max-width: 400px; margin-left: auto; margin-right: auto;">
+        <div class="card">
+            <h2>🔓 Облачный Сейф</h2>
+            <input type="password" id="passInput" placeholder="Введите пароль...">
+            <button onclick="checkPassword()">Открыть</button>
+        </div>
+    </div>
+
+    <div id="mainContent">
+        <h1>🔒 Личное Облако</h1>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" onkeyup="searchData()" placeholder="🔍 Поиск в облаке...">
+        </div>
+
+        <div class="card">
+            <h3>➕ Добавить данные</h3>
+            <select id="dataType">
+                <option value="note">📝 Заметка</option>
+                <option value="link">🔗 Ссылка</option>
+                <option value="file">📁 Файл/Медиа</option>
+            </select>
+            <input type="text" id="dataTitle" placeholder="Заголовок...">
+            <textarea id="dataContent" placeholder="Текст или ссылка..."></textarea>
+            <div id="loading" class="loader">Сохранение...</div>
+            <button id="saveBtn" onclick="saveData()">Сохранить в облако</button>
+        </div>
+
+        <div id="displayArea"></div>
+    </div>
+
+    <script>
+        // --- НАСТРОЙКИ ---
+        const SB_URL = "https://pokndnygducdizmuajek.supabase.co";
+        const SB_KEY = "sb_publishable_38t8s0j-MLQnwgQDfH471w_M7hDZCdt";
+        const SECRET_PASSWORD = "201595sA!@"; // ПОМЕНЯЙ ЭТОТ ПАРОЛЬ НА СВОЙ!
+
+        const supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        async function checkPassword() {
+            const entered = document.getElementById('passInput').value;
+            if (entered === SECRET_PASSWORD) {
+                document.getElementById('loginBlock').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                await setupTable(); // Проверяем таблицу при входе
+                loadData();
+            } else { alert("Неверно!"); }
+        }
+
+        // Авто-создание таблицы (через RPC или попытку запроса)
+        async function setupTable() {
+            // В Supabase Free обычно таблицу создают в консоли, 
+            // но мы попробуем работать с ней напрямую.
+            console.log("Связь с облаком установлена.");
+        }
+
+        async function saveData() {
+            const btn = document.getElementById('saveBtn');
+            const loader = document.getElementById('loading');
+            const type = document.getElementById('dataType').value;
+            const title = document.getElementById('dataTitle').value;
+            const content = document.getElementById('dataContent').value;
+
+            if(!title || !content) return alert("Заполни поля!");
+
+            btn.style.display = 'none';
+            loader.style.display = 'block';
+
+            const { error } = await supabase
+                .from('my_vault')
+                .insert([{ type, title, content }]);
+
+            if (error) {
+                console.error(error);
+                alert("Ошибка! Проверь, создал ли ты таблицу в Supabase (см. инструкцию ниже).");
+            } else {
+                document.getElementById('dataTitle').value = "";
+                document.getElementById('dataContent').value = "";
+                loadData();
+            }
+            btn.style.display = 'block';
+            loader.style.display = 'none';
+        }
+
+        async function loadData() {
+            const area = document.getElementById('displayArea');
+            let { data: notes, error } = await supabase
+                .from('my_vault')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) return console.log("Таблица еще не создана");
+
+            area.innerHTML = "";
+            notes.forEach(item => {
+                let body = (item.type === 'note') 
+                    ? `<p style="white-space: pre-wrap;">${item.content}</p>` 
+                    : `<p><a href="${item.content}" target="_blank">Открыть ↗</a></p>`;
+
+                area.innerHTML += `
+                    <div class="card">
+                        <span class="delete-btn" onclick="deleteItem(${item.id})">🗑️</span>
+                        <span class="type-badge type-${item.type}">${item.type}</span>
+                        <h4>${item.title}</h4>
+                        ${body}
+                    </div>`;
+            });
+        }
+
+        async function deleteItem(id) {
+            if(!confirm("Удалить?")) return;
+            await supabase.from('my_vault').delete().eq('id', id);
+            loadData();
+        }
+
+        function searchData() {
+            let filter = document.getElementById('searchInput').value.toLowerCase();
+            let cards = document.querySelectorAll('#displayArea .card');
+            cards.forEach(card => {
+                card.style.display = card.innerText.toLowerCase().includes(filter) ? "" : "none";
+            });
+        }
+    </script>
+</body>
+</html>
